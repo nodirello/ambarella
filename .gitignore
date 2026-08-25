@@ -29,3 +29,4 @@
 
 # Legacy archive kept for reference
 /_legacy
+database/database.sqlite
