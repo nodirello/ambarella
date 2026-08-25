@@ -185,6 +185,8 @@ const server = createServer(async (req, res) => {
             headers['x-forwarded-proto'] = 'https';
         }
 
+        // Diagnose proxy behaviour on the dev server console.
+        console.error(`[server] ${url.pathname} ← host=${headers.host ?? '-'} xfh=${headers['x-forwarded-host'] ?? '-'} xfp=${headers['x-forwarded-proto'] ?? '-'}`);
         const { php, handler } = await createPhpAndHandler(headers.cookie);
         const response = await handler.request({
             method: req.method || 'GET',
@@ -197,14 +199,43 @@ const server = createServer(async (req, res) => {
         // StreamedPHPResponse.headers is a Promise<Record<string, string[]>>.
         const headerMap = await response.headers;
         const responseHeaders = {};
+        let contentType = '';
         for (const [name, values] of Object.entries(headerMap ?? {})) {
             const key = name.toLowerCase();
+            if (key === 'content-type') contentType = Array.isArray(values) ? values.join(', ') : String(values);
+            if (key === 'content-length') continue; // body may be rewritten below
             // Set-Cookie must remain separate header lines (never comma-joined).
             responseHeaders[key] = key === 'set-cookie' && Array.isArray(values) ? values : String(values);
         }
 
+        let body = response.bytes ?? new Uint8Array(0);
+
+        // Bulletproof preview fix: the TLS proxy may rewrite Host back to
+        // localhost:8080, which would make Laravel emit http://localhost:8080
+        // absolute URLs — the visitor's browser then cannot reach them.
+        // For HTML/XML we rewrite every self-referencing absolute URL to a
+        // RELATIVE one, so assets and links always resolve against the real
+        // preview origin regardless of Host/X-Forwarded handling.
+        if (/text\/html|application\/xml/i.test(contentType) && body.length) {
+            let html = Buffer.from(body).toString('utf8');
+            const selfPrefixes = [
+                `http://localhost:${PORT}`,
+                `https://localhost:${PORT}`,
+                'http://localhost',
+                'https://localhost',
+            ];
+            let changed = false;
+            for (const prefix of selfPrefixes) {
+                if (html.includes(prefix)) { html = html.split(prefix).join(''); changed = true; }
+            }
+            if (changed) {
+                body = Buffer.from(html, 'utf8');
+                console.error(`[server] ${url.pathname}: mutlaq URL'lar relative qilindi`);
+            }
+        }
+
         res.writeHead(status, responseHeaders);
-        res.end(Buffer.from(response.bytes ?? new Uint8Array(0)));
+        res.end(Buffer.from(body));
     } catch (error) {
         console.error('[server] error:', error);
         if (!res.headersSent) {

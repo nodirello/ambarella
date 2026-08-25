@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ambarella-v1';
+const CACHE_NAME = 'ambarella-v2';
 const OFFLINE_URL = '/offline';
 const PRECACHE = ['/', '/offline', '/favicon.svg'];
 
@@ -18,6 +18,7 @@ self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
 
     const url = new URL(event.request.url);
+    if (url.origin !== self.location.origin) return; // never intercept cross-origin
     if (url.pathname.startsWith('/admin') || url.pathname.startsWith('/login')
         || url.pathname.startsWith('/register') || url.pathname.startsWith('/webhook')) {
         return;
