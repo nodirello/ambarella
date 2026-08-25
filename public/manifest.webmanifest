@@ -1,0 +1,19 @@
+{
+  "name": "AMBARELLA — O'zbekiston yoshlari platformasi",
+  "short_name": "AMBARELLA",
+  "description": "Bandlik, ekologiya, ta'lim, mentorlik — 20+ modul bitta platformada",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "lang": "uz",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Ish e'lonlari", "url": "/jobs" },
+    { "name": "Academy", "url": "/academy" },
+    { "name": "Ekologiya", "url": "/eco" },
+    { "name": "Dashboard", "url": "/dashboard" }
+  ]
+}
