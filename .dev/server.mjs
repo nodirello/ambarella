@@ -158,6 +158,52 @@ async function toArrayBuffer(body) {
     return Buffer.concat(chunks);
 }
 
+function inlineAssets(html) {
+    // Replace <link rel="stylesheet" href="...css"> with inline <style> and
+    // <script type="module" src="...js"> with inline <script>, so the preview
+    // renders the full design without a single extra request (bulletproof
+    // against proxy, caching and service-worker quirks).
+    const stripRegexes = [
+        /<link\b[^>]*rel=["']preload["'][^>]*as=["']style["'][^>]*href=["'][^"']+["'][^>]*\/?>/g,
+        /<link\b[^>]*rel=["']modulepreload["'][^>]*\/?>/g,
+    ];
+    const cssRegex = /<link\b[^>]*rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*\/?>/g;
+    const jsRegex = /<script\b[^>]*type=["']module["'][^>]*src=["']([^"']+)["'][^>]*>\s*<\/script>/g;
+    const selfJsRegex = /\/[\w-]+\/[^"'`]*build\/assets\/app-[A-Za-z0-9_-]+\.js/g;
+
+    let result = html;
+    const replacements = [];
+
+    for (const regex of stripRegexes) {
+        result = result.replace(regex, '');
+    }
+
+    for (const m of html.matchAll(cssRegex)) {
+        const path = m[1].replace(/^https?:\/\/[^/]+/, '').replace(/^\//, '');
+        try {
+            const css = readFileSync(join(PUBLIC_DIR, path), 'utf8');
+            replacements.push([m[0], `<style>\n${css}\n</style>`]);
+        } catch { /* keep original link */ }
+    }
+
+    for (const m of html.matchAll(jsRegex)) {
+        const path = m[1].replace(/^https?:\/\/[^/]+/, '').replace(/^\//, '');
+        try {
+            const js = readFileSync(join(PUBLIC_DIR, path), 'utf8');
+            replacements.push([m[0], `<script type="module">\n${js}\n</script>`]);
+        } catch { /* keep original script */ }
+    }
+
+    for (const [original, replacement] of replacements) {
+        result = result.replace(original, replacement);
+    }
+
+    // Vite embeds a dynamic modulepreload of its own entry inside the bundle.
+    // It resolves against the current origin (fine), but leave it untouched —
+    // removing it risks breaking lazy chunks. Only strip plain <link> tags above.
+    return result;
+}
+
 const server = createServer(async (req, res) => {
     const url = new URL(req.url, `http://localhost:${PORT}`);
 
@@ -224,14 +270,18 @@ const server = createServer(async (req, res) => {
                 'http://localhost',
                 'https://localhost',
             ];
-            let changed = false;
             for (const prefix of selfPrefixes) {
-                if (html.includes(prefix)) { html = html.split(prefix).join(''); changed = true; }
+                if (html.includes(prefix)) { html = html.split(prefix).join(''); }
             }
-            if (changed) {
-                body = Buffer.from(html, 'utf8');
-                console.error(`[server] ${url.pathname}: mutlaq URL'lar relative qilindi`);
+
+            // Critical: inline CSS + JS so the browser renders the design
+            // without any external asset requests.
+            const before = html;
+            html = inlineAssets(html);
+            if (html !== before) {
+                console.error(`[server] ${url.pathname}: CSS/JS inline qilindi (dizayn kafolatli)`);
             }
+            body = Buffer.from(html, 'utf8');
         }
 
         res.writeHead(status, responseHeaders);
