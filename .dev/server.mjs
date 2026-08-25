@@ -46,6 +46,19 @@ function ensureEnv() {
         writeFileSync(envPath, env);
         console.error('[server] .env (APP_KEY bilan) avtomatik yaratildi.');
     }
+
+    // Preview runs inside an iframe (cross-site), so the browser treats any
+    // request as third-party: SameSite=Lax cookies are NOT sent on POST →
+    // Laravel sees a fresh session every time → 419 Page Expired.
+    // SameSite=None + Secure is the only combination sent on cross-site POSTs.
+    let env = readFileSync(envPath, 'utf8');
+    const patch = (key, value) => {
+        const re = new RegExp('^' + key + '=.*$', 'm');
+        env = re.test(env) ? env.replace(re, key + '=' + value) : env + '\n' + key + '=' + value;
+    };
+    patch('SESSION_SAME_SITE', 'none');
+    patch('SESSION_SECURE_COOKIE', 'true');
+    writeFileSync(envPath, env);
 }
 
 function ensureDatabase() {
@@ -255,6 +268,17 @@ const server = createServer(async (req, res) => {
             if (key === 'content-type') contentType = Array.isArray(values) ? values.join(', ') : String(values);
             if (key === 'content-length') continue; // body may be rewritten below
             // Set-Cookie must remain separate header lines (never comma-joined).
+            if (key === 'set-cookie') {
+                const cookies = Array.isArray(values) ? values : [String(values)];
+                // Keep ONLY the session cookie: one header survives proxy
+                // header-merging; the XSRF-TOKEN cookie is a convenience only
+                // (forms use the hidden _token, and our JS uses the meta
+                // csrf-token header), and a merged Set-Cookie line would make
+                // the browser drop BOTH cookies → 419 loop.
+                const sessionOnly = cookies.filter((c) => /^ambarella-session=/.test(c));
+                responseHeaders[key] = sessionOnly.length ? sessionOnly : cookies;
+                continue;
+            }
             responseHeaders[key] = key === 'set-cookie' && Array.isArray(values) ? values : String(values);
         }
 
