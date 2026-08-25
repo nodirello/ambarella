@@ -63,7 +63,7 @@
         <header class="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white/80 px-6 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
             <h1 class="text-lg font-bold">@yield('admin-title', 'Boshqaruv paneli')</h1>
             <div class="flex items-center gap-3 text-sm">
-                <a href="{{ route('home') }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">Saytga qaytish</a>
+                <a href="{{ url('/') }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">Saytga qaytish</a>
                 <form action="{{ route('logout') }}" method="POST">
                     @csrf
                     <button class="rounded-lg border border-slate-200 px-3 py-1.5 dark:border-slate-700">Chiqish</button>

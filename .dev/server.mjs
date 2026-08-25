@@ -268,7 +268,17 @@ const server = createServer(async (req, res) => {
         // preview origin regardless of Host/X-Forwarded handling.
         if (/text\/html|application\/xml/i.test(contentType) && body.length) {
             let html = Buffer.from(body).toString('utf8');
+
+            // Strip ANY self-referencing host, not just localhost. The preview
+            // proxy can rewrite Host to localhost:8080 or to any e2b host;
+            // Laravel builds absolute URLs from the Host it saw, so links can
+            // point to a host that differs from the browser's origin. Relative
+            // URLs always resolve against the browser's current origin.
+            const seenHost = headers['x-forwarded-host'] || headers.host || `localhost:${PORT}`;
             const selfPrefixes = [
+                `http://${seenHost}`,
+                `https://${seenHost}`,
+                `//${seenHost}`,
                 `http://localhost:${PORT}`,
                 `https://localhost:${PORT}`,
                 'http://localhost',
@@ -278,6 +288,10 @@ const server = createServer(async (req, res) => {
                 if (html.includes(prefix)) { html = html.split(prefix).join(''); }
             }
 
+            // A stripped root URL (e.g. http://host → "") must become "/",
+            // otherwise the logo/home links do nothing (empty href).
+            html = html.replace(/href=""/g, 'href="/"');
+
             // Critical: inline CSS + JS so the browser renders the design
             // without any external asset requests.
             const before = html;
@@ -286,6 +300,19 @@ const server = createServer(async (req, res) => {
                 console.error(`[server] ${url.pathname}: CSS/JS inline qilindi (dizayn kafolatli)`);
             }
             body = Buffer.from(html, 'utf8');
+        }
+
+        // Redirect Location headers must not point at a stale host either —
+        // make them relative so the browser stays on its own origin.
+        if (status >= 300 && status < 400 && responseHeaders.location) {
+            const loc = responseHeaders.location;
+            const seenHost = headers['x-forwarded-host'] || headers.host || `localhost:${PORT}`;
+            for (const host of [seenHost, `localhost:${PORT}`, 'localhost']) {
+                if (loc.includes(host)) {
+                    responseHeaders.location = loc.split(host).join('');
+                    break;
+                }
+            }
         }
 
         res.writeHead(status, responseHeaders);

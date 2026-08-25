@@ -18,7 +18,7 @@
 
     <header class="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
         <div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-            <a href="{{ route('home') }}" class="flex items-center gap-2.5 font-extrabold tracking-tight text-lg">
+            <a href="{{ url('/') }}" class="flex items-center gap-2.5 font-extrabold tracking-tight text-lg">
                 <span class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-lg shadow-blue-600/20">A</span>
                 <span class="hidden sm:block">AMBARELLA</span>
             </a>
