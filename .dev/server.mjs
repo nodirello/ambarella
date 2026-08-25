@@ -228,12 +228,12 @@ const server = createServer(async (req, res) => {
                 .map(([name, value]) => [name, String(value)])
         );
 
-        // Everything reaching this server from outside goes through the TLS
-        // proxy; if the proxy omitted the scheme header, default to https so
-        // Laravel never emits mixed-content (http) URLs in the browser.
-        if (!headers['x-forwarded-proto'] && !(headers.host ?? '').startsWith('localhost')) {
-            headers['x-forwarded-proto'] = 'https';
-        }
+        // NOTE: we deliberately do NOT force X-Forwarded-Proto: https here.
+        // Doing so made Laravel mark cookies as `Secure`, and the sandbox proxy
+        // then mishandles them so the browser never keeps the session → 419 /
+        // login loop. URLs are rewritten to relative by the response pass, so
+        // the app works identically over plain HTTP internally.
+        
 
         // Diagnose proxy behaviour on the dev server console.
         console.error(`[server] ${url.pathname} ← host=${headers.host ?? '-'} xfh=${headers['x-forwarded-host'] ?? '-'} xfp=${headers['x-forwarded-proto'] ?? '-'}`);
@@ -310,6 +310,8 @@ const server = createServer(async (req, res) => {
             for (const host of [seenHost, `localhost:${PORT}`, 'localhost']) {
                 if (loc.includes(host)) {
                     responseHeaders.location = loc.split(host).join('');
+                    // May leave a dangling scheme like "http:///dashboard".
+                    responseHeaders.location = responseHeaders.location.replace(/^[a-z]+:\/\/+/i, '/');
                     break;
                 }
             }
