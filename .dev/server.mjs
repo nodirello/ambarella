@@ -195,7 +195,11 @@ function inlineAssets(html) {
     }
 
     for (const [original, replacement] of replacements) {
-        result = result.replace(original, replacement);
+        // IMPORTANT: use a function replacement — String.replace() interprets
+        // $&, $', $` etc. in the replacement string, and minified JS is full
+        // of "$." sequences, which corrupted the HTML (stray JS rendered as
+        // text). A callback performs a literal replacement.
+        result = result.replace(original, () => replacement);
     }
 
     // Vite embeds a dynamic modulepreload of its own entry inside the bundle.
