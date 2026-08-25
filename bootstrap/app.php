@@ -19,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Reverse-proxy friendly URL generation. In dev/preview the app sits
+        // behind a TLS proxy (e2b/Arena), so trust it for scheme + host.
+        $middleware->trustProxies(at: env('TRUSTED_PROXIES', '*'));
+
         // Global middleware (executed for every request).
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
         $middleware->append(\App\Http\Middleware\SetLocale::class);

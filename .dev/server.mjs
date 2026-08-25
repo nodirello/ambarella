@@ -169,11 +169,21 @@ const server = createServer(async (req, res) => {
 
     try {
         const rawBody = await toArrayBuffer(req);
+        // Pass the real client headers through (host + forwarded proto are
+        // critical: Laravel generates absolute URLs from them, and the preview
+        // is reached through a TLS proxy on a different host).
         const headers = Object.fromEntries(
             Object.entries(req.headers)
-                .filter(([name]) => ['cookie', 'accept', 'accept-language', 'user-agent', 'content-type', 'x-telegram-bot-api-secret-token', 'x-telegram-init-data', 'authorization', 'x-requested-with'].includes(name))
+                .filter(([name]) => ['host', 'cookie', 'accept', 'accept-language', 'user-agent', 'content-type', 'x-telegram-bot-api-secret-token', 'x-telegram-init-data', 'authorization', 'x-requested-with', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-port'].includes(name))
                 .map(([name, value]) => [name, String(value)])
         );
+
+        // Everything reaching this server from outside goes through the TLS
+        // proxy; if the proxy omitted the scheme header, default to https so
+        // Laravel never emits mixed-content (http) URLs in the browser.
+        if (!headers['x-forwarded-proto'] && !(headers.host ?? '').startsWith('localhost')) {
+            headers['x-forwarded-proto'] = 'https';
+        }
 
         const { php, handler } = await createPhpAndHandler(headers.cookie);
         const response = await handler.request({
